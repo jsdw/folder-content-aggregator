@@ -7,7 +7,7 @@ The implementation is robust in the face of any watcher node or the master node 
 # Install
 
 ```
-cs server
+cd server
 export GOPATH=$(pwd)
 go install ...
 ```
