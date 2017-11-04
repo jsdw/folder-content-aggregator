@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>File List</title>
+  <meta name="description" content="The HTML5 Herald">
+  <meta name="author" content="SitePoint">
+  <style type="text/css">
+    body {
+        font-family: monospace;
+        margin: 0;
+        padding: 10px;
+        background-color: black;
+        color: lime;
+    }
+    .stale {
+        color: #bdbdbd;
+    }
+  </style>
+</head>
+<body>
+  <table class="contents"></table>
+  <script type="text/javascript">
+
+    function getList(){
+        return fetch("/api/list")
+            .then(res => res.json())
+            .then(out => { out.Files.sort(listSortFn); return out })
+            .catch(err => ({ Changed: 0, Files: [] }));
+    }
+
+    function listSortFn(a, b){
+        return a.Name != b.Name
+            ? a.Name.localeCompare(b.Name)
+            : a.Type != b.Type
+                ? a.Type.localeCompare(b.Type)
+                : a.Id != b.Id
+                    ? a.Id.localeCompare(b.Id)
+                    : a.Stale < b.Stale;
+    }
+
+    function updateHtml(list){
+
+        var files = list.Files;
+        var contentEl = document.querySelector(".contents");
+        emptyNode(contentEl);
+
+        files.forEach(item => {
+
+            var rowEl = document.createElement("tr");
+
+            if(item.Stale){
+                rowEl.classList.add("stale")
+            }
+
+            var nameCell = document.createElement("td");
+            nameCell.appendChild(document.createTextNode(item.Name));
+
+            var typeCell = document.createElement("td");
+            typeCell.appendChild(document.createTextNode(item.Type));
+
+            rowEl.appendChild(nameCell)
+            rowEl.appendChild(typeCell)
+
+            contentEl.appendChild(rowEl);
+
+        });
+    }
+
+    function emptyNode(node){
+        var last;
+        while(last = node.lastChild) node.removeChild(last);
+    }
+
+    function watcher(){
+        setInterval(() => getList().then(updateHtml), 500);
+    }
+
+    watcher()
+
+  </script>
+</body>
+</html>
