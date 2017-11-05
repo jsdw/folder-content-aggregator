@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"jsdw/shared/timings"
 	"jsdw/shared/types"
+	"jsdw/watcher/diff"
 	"log"
 	"net/http"
 	"time"
@@ -44,7 +45,7 @@ func watcher(path string, address string, uuid string) {
 		}
 
 		// we can continue despite an error (the directory will just look empty).
-		diff := diffFiles(lastFiles, nextFiles)
+		diff := diff.Make(lastFiles, nextFiles)
 
 		// try sending diff to master. if we succeed, update for next diff, else
 		// prepare to re-send everything on next attempt incase master restarted.
@@ -94,52 +95,6 @@ func sendDiffToMaster(isFirst bool, client http.Client, diff types.FileInfoDiff,
 
 	resp.Body.Close()
 	return nil
-
-}
-
-// get the difference between two lists of files
-func diffFiles(a []types.FileInfo, b []types.FileInfo) types.FileInfoDiff {
-	return types.FileInfoDiff{
-		Added:   diffAdded(a, b),
-		Removed: diffRemoved(a, b),
-	}
-}
-
-func diffAdded(a []types.FileInfo, b []types.FileInfo) []types.FileInfo {
-
-	added := []types.FileInfo{}
-
-	aHash := map[string]struct{}{}
-	for _, file := range a {
-		aHash[file.Name] = struct{}{}
-	}
-
-	for _, file := range b {
-		if _, found := aHash[file.Name]; !found {
-			added = append(added, file)
-		}
-	}
-
-	return added
-
-}
-
-func diffRemoved(a []types.FileInfo, b []types.FileInfo) []types.FileInfo {
-
-	removed := []types.FileInfo{}
-
-	bHash := map[string]struct{}{}
-	for _, file := range b {
-		bHash[file.Name] = struct{}{}
-	}
-
-	for _, file := range a {
-		if _, found := bHash[file.Name]; !found {
-			removed = append(removed, file)
-		}
-	}
-
-	return removed
 
 }
 

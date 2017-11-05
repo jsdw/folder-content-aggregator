@@ -55,27 +55,6 @@ func master(opts options) {
 	startPeriodicCleanup(details)
 }
 
-// remove files whose status has not been updated lately
-func startPeriodicCleanup(details *files.Details) {
-
-	for {
-		now := time.Now()
-		details.Access(func(list *files.Files) {
-
-			newInfo := files.Files{}
-			for id, info := range *list {
-				if now.Sub(info.LastUpdated) < timings.Expiration {
-					newInfo[id] = info
-				}
-			}
-			*list = newInfo
-
-		})
-		time.Sleep(10 * time.Second)
-	}
-
-}
-
 // serve the static content and provide a simple API to get the current file list
 func startClientServer(opts options, details *files.Details) {
 
@@ -124,6 +103,7 @@ func startClientServer(opts options, details *files.Details) {
 			res, err := json.Marshal(out)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Unable to encode list into valid JSON"))
 				return
 			}
 
@@ -171,6 +151,7 @@ func startWatcherServer(opts options, details *files.Details) {
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(fmt.Sprintf("Unable to read body: %v", err)))
+			return
 		}
 
 		diffs := types.FromWatcher{}
@@ -178,6 +159,7 @@ func startWatcherServer(opts options, details *files.Details) {
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(fmt.Sprintf("Unable to decode body into valid diffs: %v", err)))
+			return
 		}
 
 		diff.ApplyToFiles(diffs, details)
@@ -192,6 +174,27 @@ func startWatcherServer(opts options, details *files.Details) {
 	err := server.ListenAndServe()
 	if err != nil {
 		log.Printf("Error starting watcher server: %v", err)
+	}
+
+}
+
+// remove files whose status has not been updated lately
+func startPeriodicCleanup(details *files.Details) {
+
+	for {
+		now := time.Now()
+		details.Access(func(list *files.Files) {
+
+			newInfo := files.Files{}
+			for id, info := range *list {
+				if now.Sub(info.LastUpdated) < timings.Expiration {
+					newInfo[id] = info
+				}
+			}
+			*list = newInfo
+
+		})
+		time.Sleep(10 * time.Second)
 	}
 
 }
