@@ -74,20 +74,20 @@ func startClientServer(opts options, details *files.Details) {
 
 		now := time.Now()
 
+		type OutputItem struct {
+			Name  string
+			Type  string
+			From  string
+			Stale bool
+		}
+		type Output struct {
+			Files []OutputItem
+		}
+
+		out := Output{}
+
+		// access the file list and read it into our output struct:
 		details.Access(func(list *files.Files) {
-
-			type OutputItem struct {
-				Name  string
-				Type  string
-				From  string
-				Stale bool
-			}
-			type Output struct {
-				Files []OutputItem
-			}
-
-			out := Output{}
-
 			for id, info := range *list {
 				isStale := now.Sub(info.LastUpdated) > timings.Stale
 				for _, file := range info.Files {
@@ -99,18 +99,17 @@ func startClientServer(opts options, details *files.Details) {
 					})
 				}
 			}
-
-			res, err := json.Marshal(out)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Unable to encode list into valid JSON"))
-				return
-			}
-
-			w.Header().Add("Content-Type", "application/json")
-			w.Write(res)
-
 		})
+
+		res, err := json.Marshal(out)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Unable to encode list into valid JSON"))
+			return
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.Write(res)
 
 	}))
 
