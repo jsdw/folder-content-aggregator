@@ -1,14 +1,14 @@
 package files
 
 import (
-	"jsdw/types"
+	"jsdw/shared/types"
 	"sync"
 	"time"
 )
 
 // Details stores a list of files
 type Details struct {
-	lock  sync.Mutex
+	sync.Mutex
 	files Files
 }
 
@@ -21,16 +21,19 @@ type Info struct {
 	Files       []types.FileInfo
 }
 
-// Get allows safe access to the files contained within:
-func (list *Details) Get(fn func(Files)) {
-	list.lock.Lock()
-	defer list.lock.Unlock()
-	fn(list.files)
+// New creates a new Info struct
+func New() *Details {
+	return &Details{
+		files: map[string]Info{},
+	}
 }
 
-// Set allows safe access to the files contained within:
-func (list *Details) Set(fn func(Files) Files) {
-	list.lock.Lock()
-	defer list.lock.Unlock()
-	list.files = fn(list.files)
+// Access allows safe access to the files contained within:
+func (list *Details) Access(fn func(*Files)) {
+	list.Lock()
+	defer list.Unlock()
+
+	files := list.files
+	fn(&files)
+	list.files = files
 }

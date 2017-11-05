@@ -5,13 +5,21 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"jsdw/master/diff"
 	"jsdw/master/files"
-	"jsdw/types"
+	"jsdw/shared/timings"
+	"jsdw/shared/types"
 	"log"
 	"net/http"
 	"os"
 	"time"
 )
+
+type options struct {
+	watcherAddress string
+	clientAddress  string
+	staticFiles    string
+}
 
 func main() {
 
@@ -40,32 +48,27 @@ func main() {
 	master(opts)
 }
 
-type options struct {
-	watcherAddress string
-	clientAddress  string
-	staticFiles    string
-}
-
 func master(opts options) {
-	details := files.Details{}
-	go startClientServer(opts, &details)
-	go startWatcherServer(opts, &details)
-	startPeriodicCleanup(&details)
+	details := files.New()
+	go startClientServer(opts, details)
+	go startWatcherServer(opts, details)
+	startPeriodicCleanup(details)
 }
 
+// remove files whose status has not been updated lately
 func startPeriodicCleanup(details *files.Details) {
 
 	for {
 		now := time.Now()
-		details.Set(func(list files.Files) files.Files {
+		details.Access(func(list *files.Files) {
 
 			newInfo := files.Files{}
-			for id, info := range list {
-				if now.Sub(info.LastUpdated) < 10*time.Second {
+			for id, info := range *list {
+				if now.Sub(info.LastUpdated) < timings.Expiration {
 					newInfo[id] = info
 				}
 			}
-			return newInfo
+			*list = newInfo
 
 		})
 		time.Sleep(10 * time.Second)
@@ -73,6 +76,7 @@ func startPeriodicCleanup(details *files.Details) {
 
 }
 
+// serve the static content and provide a simple API to get the current file list
 func startClientServer(opts options, details *files.Details) {
 
 	mux := http.NewServeMux()
@@ -91,7 +95,7 @@ func startClientServer(opts options, details *files.Details) {
 
 		now := time.Now()
 
-		details.Get(func(list files.Files) {
+		details.Access(func(list *files.Files) {
 
 			type OutputItem struct {
 				Name  string
@@ -105,8 +109,8 @@ func startClientServer(opts options, details *files.Details) {
 
 			out := Output{}
 
-			for id, info := range list {
-				isStale := now.Sub(info.LastUpdated) > 2*time.Second
+			for id, info := range *list {
+				isStale := now.Sub(info.LastUpdated) > timings.Stale
 				for _, file := range info.Files {
 					out.Files = append(out.Files, OutputItem{
 						Name:  file.Name,
@@ -144,6 +148,7 @@ func startClientServer(opts options, details *files.Details) {
 	}
 }
 
+// start the watcher server to take status updates from watchers
 func startWatcherServer(opts options, details *files.Details) {
 
 	// a route which, given diffs to apply, updates our current files.Details
@@ -168,14 +173,14 @@ func startWatcherServer(opts options, details *files.Details) {
 			w.Write([]byte(fmt.Sprintf("Unable to read body: %v", err)))
 		}
 
-		diff := types.FromWatcher{}
-		err = json.Unmarshal(body, &diff)
+		diffs := types.FromWatcher{}
+		err = json.Unmarshal(body, &diffs)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(fmt.Sprintf("Unable to decode body into valid diffs: %v", err)))
 		}
 
-		applyDiffToFiles(diff, details)
+		diff.ApplyToFiles(diffs, details)
 
 	})
 
@@ -188,67 +193,5 @@ func startWatcherServer(opts options, details *files.Details) {
 	if err != nil {
 		log.Printf("Error starting watcher server: %v", err)
 	}
-
-}
-
-func applyDiffToFiles(diff types.FromWatcher, details *files.Details) {
-
-	removed := diff.Diff.Removed
-	removedHash := map[string]struct{}{}
-	for _, file := range removed {
-		removedHash[file.Name] = struct{}{}
-	}
-
-	details.Set(func(list files.Files) files.Files {
-
-		now := time.Now()
-		curr := list[diff.ID]
-
-		// we'll update our file list based on the diff, so start from empty
-		newFiles := []types.FileInfo{}
-
-		// add any files to our new list that haven't been removed in the diff,
-		// unless this is our first time getting the list, in which case we start fresh
-		if !diff.First {
-			for _, file := range curr.Files {
-				if _, removed := removedHash[file.Name]; !removed {
-					newFiles = append(newFiles, file)
-				}
-			}
-		}
-
-		// append added files:
-		for _, file := range diff.Diff.Added {
-			newFiles = append(newFiles, file)
-		}
-
-		// dedupe by name:
-		newFiles = dedupeByName(newFiles)
-
-		// add to the aggregate list and return it:
-		list[diff.ID] = files.Info{
-			LastUpdated: now,
-			Files:       newFiles,
-		}
-		return list
-
-	})
-
-}
-
-func dedupeByName(list []types.FileInfo) []types.FileInfo {
-
-	newList := []types.FileInfo{}
-	seen := map[string]struct{}{}
-
-	for _, val := range list {
-		if _, seenBefore := seen[val.Name]; !seenBefore {
-			newList = append(newList, val)
-		} else {
-			seen[val.Name] = struct{}{}
-		}
-	}
-
-	return newList
 
 }

@@ -7,7 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"jsdw/types"
+	"jsdw/shared/timings"
+	"jsdw/shared/types"
 	"log"
 	"net/http"
 	"time"
@@ -57,8 +58,12 @@ func watcher(path string, address string, uuid string) {
 			isFirst = false
 		}
 
-		// wait a little before trying again:
-		time.Sleep(500 * time.Millisecond)
+		// wait a little before trying again. One area for improvement could be to
+		// spin off one goroutine to update the file listing, and another to periodically
+		// send updates to the master; the worry as it stands is that, if getting the file
+		// list becomes slow, updates to the master will become slow enough that the master
+		// marks the files as stale.
+		time.Sleep(timings.UpdateInterval)
 
 	}
 
