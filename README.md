@@ -6,7 +6,7 @@ The implementation is robust in the face of any watcher node or the master node 
 
 # Install
 
-Requires Go 1.9
+The backend bits require Go 1.9. The client requires a relatively modern browser to accomodate `fetch` and arrow functions.
 
 ```
 cd server
