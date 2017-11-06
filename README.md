@@ -6,6 +6,8 @@ The implementation is robust in the face of any watcher node or the master node 
 
 # Install
 
+Requires Go 1.9
+
 ```
 cd server
 export GOPATH=$(pwd)
