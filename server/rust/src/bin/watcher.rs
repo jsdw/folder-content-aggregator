@@ -88,7 +88,10 @@ fn main() {
         let work = pool.spawn_fn(move || {
 
             // on another thread, get last_files and calculate
-            // the diff, returning it if successful.
+            // the diff, returning it if successful. This is such
+            // a small job it's hardly worth the effort of a cpupool,
+            // but It's here to have a go at handling an expensive task
+            // effectively
             let mut last_files = last_files.lock().unwrap();
             let curr = list_files_in_dir(&folder).map_err(Error::Io)?;
             let diff = owned_diff(&last_files, &curr);
