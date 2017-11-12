@@ -146,9 +146,12 @@ fn main() {
         });
 
         // spawn the "work" off to separate it from the interval,
-        // so that the interval is not blocked. This is probably
-        // unnecessary (and possibly not a good idea), but for the
-        // sake of trying it..
+        // so that the interval is not blocked. This means that, even if
+        // sending the file list off took 250ms, we'd still send one off
+        // every 500ms. Otherwise, the interval would block and take 750ms
+        // each run. It's here to have a play more than anything though,
+        // since we don't handle the case where listing files takes longer than
+        // 500ms and causes work to gradually build up.
         handle.spawn(work);
         Ok(())
 
