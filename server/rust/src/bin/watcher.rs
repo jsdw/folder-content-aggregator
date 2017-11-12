@@ -55,10 +55,15 @@ fn main() {
     println!("- master: {}", master);
     println!("- folder: {:?}", folder);
 
+    // we don't really need Futures and things, and could happily run such a
+    // simple thing using basic sync code, but I want to have a play with them
+    // so here goes :)
     let mut core = Core::new().unwrap();
     let handle = core.handle();
     let pool = CpuPool::new(1);
     let interval = Interval::new(Duration::from_millis(500), &handle).unwrap();
+
+    // reuse the same client for connection pooling etc:
     let client = Client::new(&handle);
 
     // our state; keep track of what the last files we saw were, and whether
@@ -83,7 +88,7 @@ fn main() {
         let work = pool.spawn_fn(move || {
 
             // on another thread, get last_files and calculate
-            // the diff, returning it if successful:
+            // the diff, returning it if successful.
             let mut last_files = last_files.lock().unwrap();
             let curr = list_files_in_dir(&folder).map_err(Error::Io)?;
             let diff = owned_diff(&last_files, &curr);
