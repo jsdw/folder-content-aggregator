@@ -1,3 +1,4 @@
-server/bin
-server/pkg
+server/go/bin
+server/go/pkg
+server/rust/target
 .vscode

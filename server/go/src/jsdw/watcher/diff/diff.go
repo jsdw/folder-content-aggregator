@@ -16,11 +16,11 @@ func diffAdded(a []types.FileInfo, b []types.FileInfo) []types.FileInfo {
 
 	aHash := map[string]struct{}{}
 	for _, file := range a {
-		aHash[file.Name] = struct{}{}
+		aHash[file.Name+file.Type] = struct{}{}
 	}
 
 	for _, file := range b {
-		if _, found := aHash[file.Name]; !found {
+		if _, found := aHash[file.Name+file.Type]; !found {
 			added = append(added, file)
 		}
 	}
