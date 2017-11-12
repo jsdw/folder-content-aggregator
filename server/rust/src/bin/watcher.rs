@@ -112,15 +112,17 @@ fn main() {
             req.headers_mut().set(ContentType::json());
             req.set_body(files_json);
 
-            client.request(req).map_err(Error::Hyper)
+            client.request(req)
+                .map_err(Error::Hyper)
+                .and_then(|res| {
+                    if !res.status().is_success() {
+                        Err(Error::BadResponse(res.status()))
+                    } else {
+                        Ok(res)
+                    }
+                })
 
         }).then(move |res| {
-
-            let is_first3 = is_first2.clone();
-            let handle_err = move || {
-                is_first3.set(true);
-                *last_files2.lock().unwrap() = vec![];
-            };
 
             // check for response success/error and complain if it
             // wasn't successful/an error occurred, setting our state
@@ -128,19 +130,13 @@ fn main() {
             match res {
                 Err(e) => {
                     println!("{}", e);
-                    handle_err();
+                    is_first2.set(true);
+                    *last_files2.lock().unwrap() = vec![];
                 },
-                Ok(r) => {
-                    let status = r.status();
-                    if !status.is_success() {
-                        println!("Bad status from master ({}): {}", status.as_u16(), status.canonical_reason().unwrap_or(""));
-                        handle_err();
-                    } else {
-                        is_first2.set(false);
-                    }
+                Ok(_) => {
+                    is_first2.set(false);
                 }
             };
-
             futures::future::ok(())
 
         });
@@ -205,12 +201,14 @@ fn owned_diff<'a, T: Eq + Hash + Clone>(old: &'a [T], new: &'a [T]) -> Diff<T> {
 #[derive(Debug)]
 enum Error {
     Hyper(hyper::Error),
-    Io(io::Error)
+    Io(io::Error),
+    BadResponse(hyper::StatusCode)
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            &Error::BadResponse(status) => write!(f, "Bad response code: {}", status.as_u16()),
             &Error::Hyper(ref e) => write!(f, "HTTP Error: {}", e),
             &Error::Io(ref e) => write!(f, "IO Error: {}", e),
         }
