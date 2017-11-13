@@ -5,9 +5,13 @@ extern crate hyper;
 extern crate tokio_core;
 extern crate futures_cpupool;
 extern crate rand;
-#[macro_use] extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
+
+extern crate lib;
+
+use lib::shared::types::*;
+use lib::shared::timings;
 
 use rand::{thread_rng, Rng};
 use structopt::StructOpt;
@@ -17,7 +21,6 @@ use futures_cpupool::CpuPool;
 use tokio_core::reactor::{Core,Interval};
 use hyper::{Client,Uri,Request,Method};
 use hyper::header::{ContentType,ContentLength};
-use std::time::Duration;
 use std::fs;
 use std::io;
 use std::fmt;
@@ -61,7 +64,7 @@ fn main() {
     let mut core = Core::new().unwrap();
     let handle = core.handle();
     let pool = CpuPool::new(1);
-    let interval = Interval::new(Duration::from_millis(500), &handle).unwrap();
+    let interval = Interval::new(timings::update(), &handle).unwrap();
 
     // reuse the same client for connection pooling etc:
     let client = Client::new(&handle);
@@ -101,7 +104,7 @@ fn main() {
         }).and_then(move |diff| {
 
             // produce our output and JSONify it:
-            let out = Output {
+            let out = FromWatcher {
                 id: id,
                 diff: diff,
                 first: is_first.get()
@@ -216,42 +219,4 @@ impl fmt::Display for Error {
             &Error::Io(ref e) => write!(f, "IO Error: {}", e),
         }
     }
-}
-
-// everything that can be sent is mangled to look like the Go values sent
-// from the Go version of this watcher (though capitalisation shouldn't strictly be
-// necessary).
-
-#[derive(Debug,Serialize,Clone)]
-struct Output {
-    #[serde(rename = "ID")]
-    id: String,
-    #[serde(rename = "Diff")]
-    diff: Diff<Item>,
-    #[serde(rename = "First")]
-    first: bool
-}
-
-#[derive(Debug,Serialize,Clone)]
-struct Diff<T> {
-    #[serde(rename = "Added")]
-    added: Vec<T>,
-    #[serde(rename = "Removed")]
-    removed: Vec<T>
-}
-
-#[derive(Debug,Serialize,Clone,Hash,Eq,Ord,PartialEq,PartialOrd)]
-struct Item {
-    #[serde(rename = "Name")]
-    name: String,
-    #[serde(rename = "Type")]
-    ty: Type
-}
-
-#[derive(Debug,Serialize,Clone,Hash,Eq,Ord,PartialEq,PartialOrd)]
-enum Type {
-    #[serde(rename = "file")]
-    File,
-    #[serde(rename = "directory")]
-    Folder
 }

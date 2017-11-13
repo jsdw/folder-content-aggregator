@@ -25,8 +25,8 @@
     function getList(){
         return fetch("/api/list")
             .then(res => res.json())
-            .then(out => { out.Files.sort(listSortFn); return out })
-            .catch(err => ({ Changed: 0, Files: [] }));
+            .then(out => { out.Files.sort(listSortFn); return out; })
+            .catch(err => { console.error("error:", err); return { Changed: 0, Files: [] }; });
     }
 
     function listSortFn(a, b){
@@ -41,6 +41,7 @@
 
     function updateHtml(list){
 
+        console.log("updated:", list);
         var files = list.Files;
         var contentEl = document.querySelector(".contents");
         emptyNode(contentEl);

@@ -24,7 +24,7 @@ type options struct {
 func main() {
 
 	watcherAddress := flag.String("watcher-address", "0.0.0.0:10000", "address for the master to listen on for watcher input")
-	clientAddress := flag.String("client-address", "0.0.0.0:80", "address for the master to listen on for client requests")
+	clientAddress := flag.String("client-address", "0.0.0.0:8080", "address for the master to listen on for client requests")
 	staticFiles := flag.String("static", "", "address to serve static content from (for client)")
 
 	flag.Parse()
