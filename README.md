@@ -14,7 +14,7 @@ export GOPATH=$(pwd)
 go install ...
 ```
 
-If you'd like to install the rust version of the watcher, you'll need to have `cargo` installed, and can then do so with:
+If you'd like to install the rust version of the master and watcher, you'll need to have `cargo` installed, and can then do so with:
 
 ```
 cd server/rust
@@ -31,13 +31,13 @@ Each watcher node can be started like so:
 
 Where "id" is optional and will be auto-generated if not provided (but is useful for consistency in the face of watchers being killed and restarted).
 
-The rust watcher runs in the same way, and allows for the same arguments to be provided.
-
 The master can be started like so:
 
 ```
 ./server/go/bin/master --static client/ --client-address 0.0.0.0:9090
 ```
+
+The rust master and watcher run in the same way, and allow for the same arguments to be provided.
 
 This allows one to visit the quick client implementation (client/index.html) at `localhost:9090` (or your machines IP address) to view the current aggregated file list.
 
