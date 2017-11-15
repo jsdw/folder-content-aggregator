@@ -124,16 +124,16 @@ impl Service for ClientServer {
             // return our current file list:
             (&Method::Get, "/api/list") => {
 
-                // let res = Response::new()
-                //     .with_header(ContentLength("hello".len() as u64))
-                //     .with_body("hello");
-
+                // clone state to move into our spawned worker thread:
                 let state = self.state.clone();
 
                 let work = self.pool.spawn_fn(move || {
 
                     // we wrap the list of items in a struct to match
-                    // the Go implementation:
+                    // the Go implementation. Running JSON encoding in
+                    // this thread improves performance significantly,
+                    // as encoding JSON is the main work done, especially
+                    // as the data grows larger!
                     let json = json!({
                         "Files": state.list()
                     });
