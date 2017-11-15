@@ -1,5 +1,4 @@
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use std::collections::{HashMap,HashSet};
 use std::time::{Instant,Duration};
 use shared::types::*;
@@ -9,7 +8,7 @@ use shared::types::*;
 //
 #[derive(Clone)]
 pub struct State {
-    state: Rc<RefCell<HashMap<String,Info>>>
+    state: Arc<Mutex<HashMap<String,Info>>>
 }
 pub struct Info {
     last_updated: Instant,
@@ -19,15 +18,16 @@ pub struct Info {
 impl State {
     pub fn new() -> State {
         State {
-            state: Rc::new(RefCell::new(HashMap::new()))
+            state: Arc::new(Mutex::new(HashMap::new()))
         }
     }
     pub fn list(&self) -> Vec<ItemList> {
 
-        let now = Instant::now();
-        let mut out = vec![];
+        let state = self.state.lock().unwrap();
 
-        for (key,info) in self.state.borrow().iter() {
+        let mut out = vec![];
+        let now = Instant::now();
+        for (key,info) in state.iter() {
             let is_stale = now.duration_since(info.last_updated) > Duration::from_millis(2000);
             for file in &info.files {
                 out.push(ItemList {
@@ -42,8 +42,10 @@ impl State {
     }
     pub fn set(&self, id: String, items: Vec<Item>) {
 
+        let mut state = self.state.lock().unwrap();
+
         let now = Instant::now();
-        self.state.borrow_mut().insert(id, Info {
+        state.insert(id, Info {
             last_updated: now,
             files: items
         });
@@ -51,7 +53,7 @@ impl State {
     }
     pub fn update(&self, id: String, diff: Diff<Item>) {
 
-        let mut items = self.state.borrow_mut();
+        let mut state = self.state.lock().unwrap();
 
         // start with any items we find, filtered by those removed
         // or those about to be added.ß
@@ -60,7 +62,7 @@ impl State {
             let removed: HashSet<&Item> = diff.removed.iter().collect();
             let added: HashSet<&Item> = diff.added.iter().collect();
 
-            items
+            state
                 .remove(&id)
                 .map(|info| info.files)
                 .unwrap_or(vec![])
@@ -74,7 +76,7 @@ impl State {
             new_files.push(item);
         }
 
-        items.insert(id, Info {
+        state.insert(id, Info {
             last_updated: Instant::now(),
             files: new_files
         });
@@ -82,10 +84,10 @@ impl State {
     }
     pub fn remove_older_than(&self, duration: Duration) {
 
-        let mut items = self.state.borrow_mut();
-        let now = Instant::now();
+        let mut state = self.state.lock().unwrap();
 
-        items.retain(|_, info| {
+        let now = Instant::now();
+        state.retain(|_, info| {
             now.duration_since(info.last_updated) < duration
         })
 

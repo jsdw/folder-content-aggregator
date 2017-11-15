@@ -1,6 +1,7 @@
 extern crate structopt;
 #[macro_use] extern crate structopt_derive;
 extern crate futures;
+extern crate futures_cpupool;
 extern crate hyper;
 extern crate tokio_core;
 extern crate serde;
@@ -16,6 +17,7 @@ use lib::master::state::State;
 use structopt::StructOpt;
 use futures::{Future, Stream};
 use futures::future;
+use futures_cpupool::CpuPool;
 use tokio_core::net::TcpListener;
 use tokio_core::reactor::{Core, Handle, Interval};
 use hyper::{Method, StatusCode};
@@ -62,8 +64,11 @@ fn main() {
     let state2 = state.clone();
     let state3 = state.clone();
 
+    // spawn worker threads to do the heavy lifting:
+    let pool = CpuPool::new_num_cpus();
+
     // kick off our watcher and client servers on the event loop:
-    spawn_server(&opts.client_address, move || ClientServer::new(state.clone(), &static_files, &handle2), handle.clone());
+    spawn_server(&opts.client_address, move || ClientServer::new(pool.clone(), state.clone(), &static_files, &handle2), handle.clone());
     spawn_server(&opts.watcher_address, move || WatcherServer::new(state2.clone()), handle.clone());
     periodic_cleanup(state3, &handle);
 
@@ -93,13 +98,15 @@ fn periodic_cleanup(state: State, handle: &Handle) {
 
 struct ClientServer {
     state: State,
+    pool: CpuPool,
     static_files: Static<NotFoundHandler>
 }
 
 impl ClientServer {
-    fn new(state: State, static_files: &Path, handle: &Handle) -> ClientServer {
+    fn new(pool: CpuPool, state: State, static_files: &Path, handle: &Handle) -> ClientServer {
         ClientServer {
             state: state,
+            pool: pool,
             static_files: Static::with_upstream(handle, static_files, NotFoundHandler)
         }
     }
@@ -117,19 +124,34 @@ impl Service for ClientServer {
             // return our current file list:
             (&Method::Get, "/api/list") => {
 
-                // we wrap the list of items in a struct to match
-                // the Go implementation:
-                let out = json!({
-                    "Files": self.state.list()
+                // let res = Response::new()
+                //     .with_header(ContentLength("hello".len() as u64))
+                //     .with_body("hello");
+
+                let state = self.state.clone();
+
+                let work = self.pool.spawn_fn(move || {
+
+                    // we wrap the list of items in a struct to match
+                    // the Go implementation:
+                    let json = json!({
+                        "Files": state.list()
+                    });
+
+                    Ok(serde_json::to_string(&json).unwrap_or_else(|_| "[]".to_owned()))
+
+                }).and_then(|out| {
+
+                    let res = Response::new()
+                        .with_header(ContentLength(out.len() as u64))
+                        .with_header(ContentType::json())
+                        .with_body(out);
+
+                    Ok(res)
+
                 });
 
-                let out = serde_json::to_string(&out).unwrap();
-                let res = Response::new()
-                    .with_header(ContentLength(out.len() as u64))
-                    .with_header(ContentType::json())
-                    .with_body(out);
-
-                Box::new(future::ok(res))
+                Box::new(work)
 
             },
             // try to serve static content if we ask for anything else:
