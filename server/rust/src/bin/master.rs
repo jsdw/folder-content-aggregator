@@ -138,7 +138,7 @@ impl Service for ClientServer {
                         "Files": state.list()
                     });
 
-                    Ok(serde_json::to_string(&json).unwrap_or_else(|_| "[]".to_owned()))
+                    Ok(serde_json::to_string(&json).unwrap_or_else(|_| r#"{ "Files": [] }"#.to_owned()))
 
                 }).and_then(|out| {
 
