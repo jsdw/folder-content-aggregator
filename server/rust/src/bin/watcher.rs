@@ -26,8 +26,6 @@ use std::io;
 use std::fmt;
 use std::hash::Hash;
 use std::collections::HashSet;
-use std::rc::Rc;
-use std::cell::Cell;
 use std::sync::{Mutex,Arc};
 
 // the command line opts we allow. This
@@ -71,47 +69,45 @@ fn main() {
 
     // our state; keep track of what the last files we saw were, and whether
     // this is a "first" response.
-    let last_files = Arc::new(Mutex::new(vec![]));
-    let is_first = Rc::new(Cell::new(true));
+    let state = Arc::new(Mutex::new(State::new()));
 
     // repeat this every 500ms:
-    let work = interval.for_each(|_| {
+    let work = interval.for_each(move |_| {
 
         let id = id.clone();
         let folder = folder.clone();
         let uri = master.clone();
         let client = client.clone();
 
-        let last_files = last_files.clone();
-        let last_files2 = last_files.clone();
-
-        let is_first = is_first.clone();
-        let is_first2 = is_first.clone();
+        let state = state.clone();
+        let state2 = state.clone();
 
         let work = pool.spawn_fn(move || {
 
-            // on another thread, get last_files and calculate
-            // the diff, returning it if successful. This is such
-            // a small job it's hardly worth the effort of a cpupool,
-            // but It's here to have a go at handling an expensive task
-            // effectively
-            let mut last_files = last_files.lock().unwrap();
-            let curr = list_files_in_dir(&folder).map_err(Error::Io)?;
-            let diff = owned_diff(&last_files, &curr);
-            *last_files = curr;
-            Ok(diff)
+            // on another thread, get file list, calculate the diff between it and
+            // the last one, and then encode to JSON. This leaves the event loop thread
+            // to just create and send off a request.
+            let diff: Diff<Item>;
+            let is_first: bool;
+            {
+                let mut state = state.lock().unwrap();
+                let curr = list_files_in_dir(&folder).unwrap_or_else(|_| vec![]);
+                diff = owned_diff(&state.files, &curr);
+                state.files = curr;
+                is_first = state.is_first;
+            }
 
-        }).and_then(move |diff| {
-
-            // produce our output and JSONify it:
             let out = FromWatcher {
                 id: id,
                 diff: diff,
-                first: is_first.get()
+                first: is_first
             };
 
+            Ok(serde_json::to_string(&out).unwrap())
+
+        }).and_then(move |files_json| {
+
             let mut req = Request::new(Method::Post, uri);
-            let files_json = serde_json::to_string(&out).unwrap();
 
             // set up the client request and make it:
             req.headers_mut().set(ContentLength(files_json.len() as u64));
@@ -136,11 +132,13 @@ fn main() {
             match res {
                 Err(e) => {
                     println!("{}", e);
-                    is_first2.set(true);
-                    *last_files2.lock().unwrap() = vec![];
+                    let mut state = state2.lock().unwrap();
+                    state.is_first = true;
+                    state.files = vec![];
                 },
                 Ok(_) => {
-                    is_first2.set(false);
+                    let mut state = state2.lock().unwrap();
+                    state.is_first = false;
                 }
             };
             futures::future::ok(())
@@ -168,7 +166,8 @@ fn main() {
 
 }
 
-// list files in the path provided, complaining if we hit a snag:
+// list files in the path provided, complaining if we hit a snag.
+// we could use notify + futures::sync::mpsc to do this better.
 fn list_files_in_dir(dir: &Path) -> io::Result<Vec<Item>> {
 
     let mut items = vec![];
@@ -207,7 +206,6 @@ fn owned_diff<'a, T: Eq + Hash + Clone>(old: &'a [T], new: &'a [T]) -> Diff<T> {
 #[derive(Debug)]
 enum Error {
     Hyper(hyper::Error),
-    Io(io::Error),
     BadResponse(hyper::StatusCode)
 }
 
@@ -215,8 +213,18 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             &Error::BadResponse(status) => write!(f, "Bad response code: {}", status.as_u16()),
-            &Error::Hyper(ref e) => write!(f, "HTTP Error: {}", e),
-            &Error::Io(ref e) => write!(f, "IO Error: {}", e),
+            &Error::Hyper(ref e) => write!(f, "HTTP Error: {}", e)
         }
+    }
+}
+
+pub struct State {
+    files: Vec<Item>,
+    is_first: bool
+}
+
+impl State {
+    pub fn new() -> State {
+        State { files: vec![], is_first: true }
     }
 }

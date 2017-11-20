@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::collections::{HashMap,HashSet};
 use std::time::{Instant,Duration};
 use shared::types::*;
@@ -8,7 +8,7 @@ use shared::types::*;
 //
 #[derive(Clone)]
 pub struct State {
-    state: Arc<Mutex<HashMap<String,Info>>>
+    state: Arc<RwLock<HashMap<String,Info>>>
 }
 pub struct Info {
     last_updated: Instant,
@@ -18,12 +18,12 @@ pub struct Info {
 impl State {
     pub fn new() -> State {
         State {
-            state: Arc::new(Mutex::new(HashMap::new()))
+            state: Arc::new(RwLock::new(HashMap::new()))
         }
     }
     pub fn list(&self) -> Vec<ItemList> {
 
-        let state = self.state.lock().unwrap();
+        let state = self.state.read().unwrap();
 
         let mut out = vec![];
         let now = Instant::now();
@@ -42,7 +42,7 @@ impl State {
     }
     pub fn set(&self, id: String, items: Vec<Item>) {
 
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.write().unwrap();
 
         let now = Instant::now();
         state.insert(id, Info {
@@ -53,7 +53,7 @@ impl State {
     }
     pub fn update(&self, id: String, diff: Diff<Item>) {
 
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.write().unwrap();
 
         // start with any items we find, filtered by those removed
         // or those about to be added.ß
@@ -84,7 +84,7 @@ impl State {
     }
     pub fn remove_older_than(&self, duration: Duration) {
 
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.write().unwrap();
 
         let now = Instant::now();
         state.retain(|_, info| {
