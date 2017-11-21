@@ -6,7 +6,7 @@ use shared::types::*;
 //
 // our shared state:
 //
-#[derive(Clone)]
+#[derive(Default,Clone)]
 pub struct State {
     state: Arc<RwLock<HashMap<String,Info>>>
 }
@@ -17,9 +17,7 @@ pub struct Info {
 
 impl State {
     pub fn new() -> State {
-        State {
-            state: Arc::new(RwLock::new(HashMap::new()))
-        }
+        State::default()
     }
     pub fn list(&self) -> Vec<ItemList> {
 
@@ -65,7 +63,7 @@ impl State {
             state
                 .remove(&id)
                 .map(|info| info.files)
-                .unwrap_or(vec![])
+                .unwrap_or_else(|| vec![])
                 .into_iter()
                 .filter(|item| !removed.contains(item) && !added.contains(item))
                 .collect()

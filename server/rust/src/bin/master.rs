@@ -84,7 +84,7 @@ fn main() {
 
 fn periodic_cleanup(state: State, handle: &Handle) {
     let expiration = timings::expiration();
-    let cleanup = Interval::new(expiration, &handle).unwrap().for_each(move |_| {
+    let cleanup = Interval::new(expiration, handle).unwrap().for_each(move |_| {
         state.remove_older_than(expiration);
         Ok(())
     }).map_err(|_| ());
@@ -233,8 +233,8 @@ impl Service for NotFoundHandler {
     type Future = Box<Future<Item=Self::Response, Error=Self::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        let (code, body) = match req.method() {
-            &Method::Head | &Method::Get => (
+        let (code, body) = match *req.method() {
+            Method::Head | Method::Get => (
                 StatusCode::NotFound,
                 "404 Not found :("
             ),
@@ -265,7 +265,7 @@ fn spawn_server<S, F>(addr: &SocketAddr, factory: F, handle: Handle)
  {
 
     let http = Http::new();
-    let listener = TcpListener::bind(&addr, &handle).expect("failed to bind TCP port");
+    let listener = TcpListener::bind(addr, &handle).expect("failed to bind TCP port");
 
     handle.clone().spawn(
         listener.incoming().for_each(move |(socket, addr)| {

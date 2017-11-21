@@ -75,12 +75,12 @@ fn main() {
     let work = interval.for_each(move |_| {
 
         let id = id.clone();
-        let folder = folder.clone();
         let uri = master.clone();
         let client = client.clone();
 
-        let state = state.clone();
-        let state2 = state.clone();
+        let folder = Arc::clone(&folder);
+        let state = Arc::clone(&state);
+        let state2 = Arc::clone(&state);
 
         let work = pool.spawn_fn(move || {
 
@@ -211,9 +211,9 @@ enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Error::BadResponse(status) => write!(f, "Bad response code: {}", status.as_u16()),
-            &Error::Hyper(ref e) => write!(f, "HTTP Error: {}", e)
+        match *self {
+            Error::BadResponse(status) => write!(f, "Bad response code: {}", status.as_u16()),
+            Error::Hyper(ref e) => write!(f, "HTTP Error: {}", e)
         }
     }
 }
